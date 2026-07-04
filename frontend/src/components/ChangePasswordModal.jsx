@@ -13,14 +13,21 @@ const ChangePasswordModal = ({open, onClose }) => {
         const formData = new FormData(e.currentTarget)
         const currentPassword = formData.get("currentPassword");
         const newPassword = formData.get("newPassword");
+        const confirmPassword = formData.get("confirmPassword");
+
+        if (newPassword !== confirmPassword) {
+            setMessage({ type: "error", text: "Passwords do not match." })
+            setLoading(false);
+            return;
+        }
 
         try {
-            const { data } = await api.post("/auth/change-password", {currentPassword, newPassword});
-            if(!data.success) throw new Error(data.error || "Failed")
-                setMessage({type: "success", text: "Password updated successfully"})
+            const { data } = await api.post("/auth/change-password", {currentPassword, newPassword, confirmPassword});
+            if(!data.success) throw new Error(data.message || "Failed")
+                setMessage({type: "success", text: data.message || "Password updated successfully"})
                 e.target.reset();
         } catch (error) {
-            setMessage({ type: "error", text: error.message })
+            setMessage({ type: "error", text: error.response?.data?.message || error.message })
         }finally{
             setLoading(false);
         }
@@ -56,6 +63,10 @@ const ChangePasswordModal = ({open, onClose }) => {
                 <div>
                     <label className="block text-sm font-medium text-slate-700 mb-2">New Password</label>
                     <input type="password" name="newPassword" required/>
+                </div>
+                <div>
+                    <label className="block text-sm font-medium text-slate-700 mb-2">Confirm New Password</label>
+                    <input type="password" name="confirmPassword" required/>
                 </div>
                 <div className='flex gap-3 pt-2'>
                     <button type="button" onClick={onClose} className="btn-secondary flex-1">

@@ -17,7 +17,7 @@ const Payslips = () => {
       const res = await api.get('/payslips')
       setPayslips(res.data.data || [])
     } catch (error) {
-      toast.error(error?.response?.data?.error || error?.message);
+      toast.error(error?.response?.data?.message || error?.message);
     }finally{
       setLoading(false)
     }

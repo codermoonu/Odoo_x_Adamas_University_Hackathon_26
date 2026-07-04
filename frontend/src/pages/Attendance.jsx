@@ -126,7 +126,7 @@ const Attendance = () => {
         setIsDeleted(true)
       }
     } catch (error) {
-      toast.error(error?.response?.data?.error || error?.message)
+      toast.error(error?.response?.data?.message || error?.message)
     } finally {
       setLoading(false)
     }

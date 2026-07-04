@@ -3,7 +3,7 @@
 import bcrypt from 'bcrypt';
 import jwt from 'jsonwebtoken';
 import { v4 as uuidv4 } from 'uuid';
-import { queryDatabase } from '../config/database.js';
+import { getUsersCollection } from '../config/database.js';
 
 // Generate Login ID
 // Format: OI + First 2 letters of first name + First 2 letters of last name + Year of joining + Serial number
@@ -12,16 +12,16 @@ export const generateLoginId = async (firstName, lastName, joinDate) => {
     const year = new Date(joinDate).getFullYear();
     const first2FirstName = (firstName || '').substring(0, 2).toUpperCase();
     const first2LastName = (lastName || '').substring(0, 2).toUpperCase();
-    
+
     // Get count of users joining in the same year
-    const query = `
-      SELECT COUNT(*) as count FROM users 
-      WHERE YEAR(join_date) = ? AND is_deleted = false
-    `;
-    const results = await queryDatabase(query, [year]);
-    const nextSerial = (results[0]?.count || 0) + 1;
+    const usersCollection = await getUsersCollection();
+    const count = await usersCollection.countDocuments({
+      $expr: { $eq: [{ $year: '$join_date' }, year] },
+      is_deleted: false
+    });
+    const nextSerial = (count || 0) + 1;
     const serialNumber = String(nextSerial).padStart(4, '0');
-    
+
     return `OI${first2FirstName}${first2LastName}${year}${serialNumber}`;
   } catch (error) {
     console.error('Error generating Login ID:', error);

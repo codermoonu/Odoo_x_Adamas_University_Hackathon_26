@@ -12,7 +12,7 @@ const CheckInButton = ({todayRecord, onAction}) => {
             await api.post("/attendance")
             onAction()
         } catch (error) {
-            toast.error(error?.response?.data?.error || error?.message);
+            toast.error(error?.response?.data?.message || error?.message);
         }
         setLoading(false)
     }

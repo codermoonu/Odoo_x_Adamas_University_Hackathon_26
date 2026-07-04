@@ -1,30 +1,30 @@
 // backend/config/database.js
 
-import mysql from 'mysql2/promise';
+import { MongoClient } from 'mongodb';
 import dotenv from 'dotenv';
 
 dotenv.config();
 
-// Create connection pool
-export const pool = mysql.createPool({
-  host: process.env.DB_HOST,
-  user: process.env.DB_USER,
-  password: process.env.DB_PASSWORD,
-  database: process.env.DB_NAME,
-  port: process.env.DB_PORT || 3306,
-  waitForConnections: true,
-  connectionLimit: 10,
-  queueLimit: 0,
-  enableKeepAlive: true,
-  keepAliveInitialDelayMs: 0,
-});
+// Create MongoDB client
+export const client = new MongoClient(process.env.MONGODB_URI);
+
+let db;
+
+// Connect (idempotent) and return the database handle
+export const connectDB = async () => {
+  if (!db) {
+    await client.connect();
+    db = client.db();
+  }
+  return db;
+};
 
 // Test connection
 export const testConnection = async () => {
   try {
-    const connection = await pool.getConnection();
-    console.log('✅ MySQL Database Connected');
-    connection.release();
+    const database = await connectDB();
+    await database.command({ ping: 1 });
+    console.log('✅ MongoDB Database Connected');
     return true;
   } catch (error) {
     console.error('❌ Database Connection Failed:', error.message);
@@ -32,16 +32,31 @@ export const testConnection = async () => {
   }
 };
 
-// Query helper with connection pooling
-export const queryDatabase = async (sql, values = []) => {
-  try {
-    const [results] = await pool.execute(sql, values);
-    return results;
-  } catch (error) {
-    console.error('Database Query Error:', error);
-    throw error;
-  }
+// Collection helpers
+export const getUsersCollection = async () => {
+  const database = await connectDB();
+  return database.collection('users');
 };
 
-// Export pool as default
-export default pool;
+export const getEmployeesCollection = async () => {
+  const database = await connectDB();
+  return database.collection('employees');
+};
+
+export const getAttendanceCollection = async () => {
+  const database = await connectDB();
+  return database.collection('attendance');
+};
+
+export const getLeavesCollection = async () => {
+  const database = await connectDB();
+  return database.collection('leaves');
+};
+
+export const getPayslipsCollection = async () => {
+  const database = await connectDB();
+  return database.collection('payslips');
+};
+
+// Export client as default
+export default client;

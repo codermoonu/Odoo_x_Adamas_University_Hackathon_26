@@ -1,6 +1,8 @@
-import { TriangleAlertIcon } from 'lucide-react'
-import React, { useMemo, useState } from 'react'
-import { dummySalaryStructure } from '../../assets/assets'
+import { Loader2Icon, SaveIcon, TriangleAlertIcon } from 'lucide-react'
+import React, { useEffect, useMemo, useState } from 'react'
+import api from '../../api/axios'
+import toast from 'react-hot-toast'
+import Loading from '../Loading'
 
 const money = (n) => `$${(Number(n) || 0).toLocaleString(undefined, {maximumFractionDigits: 2})}`
 
@@ -14,17 +16,39 @@ const UnderlineInput = ({value, onChange, type = "number", disabled = false, cla
     />
 )
 
-// TODO: no backend endpoint for salary structure yet - wage/components/PF/professional tax
-// all live in local state, seeded from dummySalaryStructure. Wire this up to a real
-// GET/POST salary-structure endpoint once one exists.
 const SalaryStructure = () => {
-    const [wage, setWage] = useState(dummySalaryStructure.wage)
-    const [components, setComponents] = useState(dummySalaryStructure.components)
+    const [wage, setWage] = useState(0)
+    const [components, setComponents] = useState([])
     const [pfRate, setPfRate] = useState(12)
     const [professionalTax, setProfessionalTax] = useState(200)
+    const [loading, setLoading] = useState(true)
+    const [saving, setSaving] = useState(false)
+
+    useEffect(()=>{
+        api.get('/salary-structure').then(({data})=>{
+            setWage(data.wage)
+            setComponents(data.components)
+            setPfRate(data.pfRate)
+            setProfessionalTax(data.professionalTax)
+        }).catch((error)=>{
+            toast.error(error.response?.data?.message || error.message)
+        }).finally(()=> setLoading(false))
+    },[])
 
     const updateComponent = (key, field) => (value) => {
         setComponents((prev)=> prev.map((c)=> c.key === key ? {...c, [field]: value} : c))
+    }
+
+    const handleSave = async () => {
+        setSaving(true)
+        try {
+            await api.put('/salary-structure', { wage, components, pfRate, professionalTax })
+            toast.success("Salary structure saved")
+        } catch (error) {
+            toast.error(error.response?.data?.message || error.message)
+        } finally {
+            setSaving(false)
+        }
     }
 
     const basicAmount = useMemo(()=>{
@@ -50,6 +74,8 @@ const SalaryStructure = () => {
 
     const pfAmount = (basicAmount * (Number(pfRate) || 0)) / 100
     const netSalary = grossTotal - pfAmount - (Number(professionalTax) || 0)
+
+    if (loading) return <Loading />
 
     return (
         <div className='space-y-6'>
@@ -152,6 +178,11 @@ const SalaryStructure = () => {
                     <span className='text-indigo-600 font-semibold'>{money(netSalary)}</span>
                 </div>
             </div>
+
+            <button type='button' onClick={handleSave} disabled={saving} className='btn-primary flex items-center gap-2 justify-center w-full sm:w-auto'>
+                {saving ? <Loader2Icon className='w-4 h-4 animate-spin'/> : <SaveIcon className='w-4 h-4'/>}
+                Save Salary Structure
+            </button>
         </div>
     )
 }

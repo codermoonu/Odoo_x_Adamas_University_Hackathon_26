@@ -5,6 +5,7 @@ import cors from 'cors';
 import dotenv from 'dotenv';
 import { testConnection } from './config/database.js';
 import authRoutes from './routes/authRoutes.js';
+import appRoutes from './routes/appRoutes.js';
 
 dotenv.config();
 
@@ -19,7 +20,7 @@ const PORT = process.env.PORT || 5000;
 app.use(cors({
   origin: process.env.CORS_ORIGIN || 'http://localhost:5173',
   credentials: true,
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization']
 }));
 
@@ -48,6 +49,7 @@ app.get('/health', (req, res) => {
 
 // API Routes
 app.use('/api/auth', authRoutes);
+app.use('/api', appRoutes);
 
 // 404 handler
 app.use((req, res) => {

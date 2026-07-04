@@ -19,7 +19,7 @@ const Leave = () => {
     setLeaves(res.data.data || [])
     if(res.data.employee?.isDeleted) setIsDeleted(true)
    } catch (error) {
-    toast.error(error?.response?.data?.error || error.message)
+    toast.error(error?.response?.data?.message || error.message)
    }finally{
     setLoading(false)
    }

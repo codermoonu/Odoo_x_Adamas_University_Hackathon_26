@@ -48,3 +48,15 @@ export const isEmployee = (req, res, next) => {
     });
   }
 };
+
+// Check if user is Admin or HR (management roles)
+export const isManager = (req, res, next) => {
+  if (req.user && (req.user.role === 'ADMIN' || req.user.role === 'HR')) {
+    next();
+  } else {
+    res.status(403).json({
+      success: false,
+      message: 'Access denied. Admin or HR role required.'
+    });
+  }
+};

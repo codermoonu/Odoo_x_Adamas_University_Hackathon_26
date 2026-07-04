@@ -6,9 +6,15 @@ import { useAuth } from '../context/AuthContext'
 import Loading from './Loading'
 import toast from 'react-hot-toast'
 
+const roleHome = (user) => {
+    if (user.firstLogin) return "/change-password"
+    if (user.role === "ADMIN" || user.role === "HR") return "/admin/dashboard"
+    return "/dashboard"
+}
+
 const LoginForm = () => {
 
-    const [email, setEmail] = useState("")
+    const [loginId, setLoginId] = useState("")
     const [password, setPassword] = useState("")
     const [showPassword, setShowPassword] = useState(false)
     const [error, setError] = useState("")
@@ -17,17 +23,17 @@ const LoginForm = () => {
     const navigate = useNavigate()
 
     if(authLoading) return <Loading />
-    if(user) return <Navigate to="/dashboard" />
+    if(user) return <Navigate to={roleHome(user)} />
 
     const handleSubmit = async (e) => {
         e.preventDefault();
         setError("")
         setLoading(true)
         try {
-            await login(email, password, "employee")
-            navigate("/dashboard")
+            const loggedInUser = await login(loginId, password)
+            navigate(roleHome(loggedInUser))
         } catch (error) {
-            const message = error.response?.data?.error || error.message || "Login failed"
+            const message = error.response?.data?.message || error.message || "Login failed"
             setError(message)
             toast.error(message)
         }finally{
@@ -55,8 +61,8 @@ const LoginForm = () => {
 
             <form className='space-y-5' onSubmit={handleSubmit}>
                 <div>
-                    <label className='block text-sm font-medium text-slate-700 mb-2'>Email address</label>
-                    <input type="email" value={email} onChange={(e)=> setEmail(e.target.value)} required placeholder='john@example.com'/>
+                    <label className='block text-sm font-medium text-slate-700 mb-2'>Login ID</label>
+                    <input type="text" value={loginId} onChange={(e)=> setLoginId(e.target.value)} required placeholder='OIJODO20220001'/>
                 </div>
                 <div>
                     <label className='block text-sm font-medium text-slate-700 mb-2'>Password</label>

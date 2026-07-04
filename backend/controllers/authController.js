@@ -12,7 +12,7 @@ import {
   generateUserId,
   generateEmployeeId
 } from '../utils/helpers.js';
-import { queryDatabase } from '../config/database.js';
+import { getUsersCollection, getEmployeesCollection } from '../config/database.js';
 
 // LOGIN USER with Login ID
 export const loginUser = async (req, res) => {
@@ -28,20 +28,18 @@ export const loginUser = async (req, res) => {
     }
 
     // Find user by Login ID
-    const query = `
-      SELECT * FROM users 
-      WHERE login_id = ? AND is_deleted = false
-    `;
-    const results = await queryDatabase(query, [loginId.toUpperCase()]);
+    const usersCollection = await getUsersCollection();
+    const user = await usersCollection.findOne({
+      login_id: loginId.toUpperCase(),
+      is_deleted: false
+    });
 
-    if (results.length === 0) {
-      return res.status(401).json({ 
-        success: false, 
-        message: 'Invalid Login ID or password.' 
+    if (!user) {
+      return res.status(401).json({
+        success: false,
+        message: 'Invalid Login ID or password.'
       });
     }
-
-    const user = results[0];
 
     // Verify password
     const isPasswordValid = await verifyPassword(password, user.password);
@@ -86,13 +84,53 @@ export const loginUser = async (req, res) => {
   }
 };
 
+// GET CURRENT SESSION (validates token, returns the logged-in user)
+export const getSession = async (req, res) => {
+  try {
+    const usersCollection = await getUsersCollection();
+    const user = await usersCollection.findOne({
+      user_id: req.user.userId,
+      is_deleted: false
+    });
+
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: 'User not found.'
+      });
+    }
+
+    const safeUser = {
+      _id: user.user_id,
+      loginId: user.login_id,
+      email: user.email,
+      role: user.role,
+      firstName: user.first_name,
+      lastName: user.last_name,
+      firstLogin: user.first_login
+    };
+
+    res.status(200).json({
+      success: true,
+      user: safeUser
+    });
+  } catch (error) {
+    console.error('Get Session Error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to fetch session.'
+    });
+  }
+};
+
 // CHANGE PASSWORD on first login
 export const changePassword = async (req, res) => {
   try {
-    const { userId, newPassword, confirmPassword } = req.body;
+    const userId = req.user.userId;
+    const { currentPassword, newPassword, confirmPassword } = req.body;
 
     // Validate input
-    if (!userId || !newPassword || !confirmPassword) {
+    if (!currentPassword || !newPassword || !confirmPassword) {
       return res.status(400).json({
         success: false,
         message: 'All fields are required.'
@@ -113,16 +151,38 @@ export const changePassword = async (req, res) => {
       });
     }
 
+    const usersCollection = await getUsersCollection();
+    const user = await usersCollection.findOne({ user_id: userId, is_deleted: false });
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: 'User not found.'
+      });
+    }
+
+    const isCurrentPasswordValid = await verifyPassword(currentPassword, user.password);
+    if (!isCurrentPasswordValid) {
+      return res.status(401).json({
+        success: false,
+        message: 'Current password is incorrect.'
+      });
+    }
+
     // Hash new password
     const hashedPassword = await hashPassword(newPassword);
 
     // Update password in database
-    const query = `
-      UPDATE users 
-      SET password = ?, temp_password = NULL, first_login = false, updated_at = NOW()
-      WHERE user_id = ?
-    `;
-    await queryDatabase(query, [hashedPassword, userId]);
+    await usersCollection.updateOne(
+      { user_id: userId },
+      {
+        $set: {
+          password: hashedPassword,
+          temp_password: null,
+          first_login: false,
+          updated_at: new Date()
+        }
+      }
+    );
 
     res.status(200).json({
       success: true,
@@ -150,7 +210,8 @@ export const createEmployee = async (req, res) => {
       basicSalary,
       allowances,
       deductions,
-      joinDate
+      joinDate,
+      role
     } = req.body;
 
     // Validate required fields
@@ -175,6 +236,14 @@ export const createEmployee = async (req, res) => {
       });
     }
 
+    const finalRole = role || 'EMPLOYEE';
+    if (!['EMPLOYEE', 'HR', 'ADMIN'].includes(finalRole)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Role must be EMPLOYEE, HR, or ADMIN.'
+      });
+    }
+
     if (!basicSalary || Number(basicSalary) <= 0) {
       return res.status(400).json({
         success: false,
@@ -183,11 +252,14 @@ export const createEmployee = async (req, res) => {
     }
 
     // Check if email already exists
-    const emailCheck = await queryDatabase(
-      'SELECT id FROM users WHERE email = ? AND is_deleted = false',
-      [email]
-    );
-    if (emailCheck.length > 0) {
+    const usersCollection = await getUsersCollection();
+    const employeesCollection = await getEmployeesCollection();
+
+    const existingUser = await usersCollection.findOne({
+      email,
+      is_deleted: false
+    });
+    if (existingUser) {
       return res.status(400).json({
         success: false,
         message: 'Email is already registered.'
@@ -204,45 +276,36 @@ export const createEmployee = async (req, res) => {
 
     // Start transaction-like behavior
     // Create user
-    const userQuery = `
-      INSERT INTO users (
-        user_id, login_id, email, password, temp_password,
-        role, first_name, last_name, join_date, first_login
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, true)
-    `;
-    await queryDatabase(userQuery, [
-      userId,
-      loginId,
+    await usersCollection.insertOne({
+      user_id: userId,
+      login_id: loginId,
       email,
-      hashedTempPassword,
-      tempPassword,
-      'EMPLOYEE',
-      firstName,
-      lastName,
-      finalJoinDate
-    ]);
+      password: hashedTempPassword,
+      temp_password: tempPassword,
+      role: finalRole,
+      first_name: firstName,
+      last_name: lastName,
+      join_date: new Date(finalJoinDate),
+      first_login: true,
+      is_deleted: false
+    });
 
     // Create employee
-    const employeeQuery = `
-      INSERT INTO employees (
-        employee_id, user_id, first_name, last_name, email, phone,
-        department, position, basic_salary, allowances, deductions, join_date
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `;
-    await queryDatabase(employeeQuery, [
-      employeeId,
-      userId,
-      firstName,
-      lastName,
+    await employeesCollection.insertOne({
+      employee_id: employeeId,
+      user_id: userId,
+      first_name: firstName,
+      last_name: lastName,
       email,
-      phone || null,
-      department || null,
+      phone: phone || null,
+      department: department || null,
       position,
-      basicSalary,
-      allowances || 0,
-      deductions || 0,
-      finalJoinDate
-    ]);
+      basic_salary: Number(basicSalary),
+      allowances: Number(allowances || 0),
+      deductions: Number(deductions || 0),
+      join_date: new Date(finalJoinDate),
+      is_deleted: false
+    });
 
     res.status(201).json({
       success: true,
@@ -251,7 +314,7 @@ export const createEmployee = async (req, res) => {
         _id: userId,
         loginId,
         email,
-        role: 'EMPLOYEE',
+        role: finalRole,
         firstName,
         lastName,
         tempPassword,
@@ -272,21 +335,29 @@ export const getUserProfile = async (req, res) => {
   try {
     const { userId } = req.params;
 
-    const query = `
-      SELECT user_id, login_id, email, role, first_name, last_name, join_date
-      FROM users
-      WHERE user_id = ? AND is_deleted = false
-    `;
-    const results = await queryDatabase(query, [userId]);
+    const usersCollection = await getUsersCollection();
+    const user = await usersCollection.findOne(
+      { user_id: userId, is_deleted: false },
+      {
+        projection: {
+          user_id: 1,
+          login_id: 1,
+          email: 1,
+          role: 1,
+          first_name: 1,
+          last_name: 1,
+          join_date: 1
+        }
+      }
+    );
 
-    if (results.length === 0) {
+    if (!user) {
       return res.status(404).json({
         success: false,
         message: 'User not found.'
       });
     }
 
-    const user = results[0];
     res.status(200).json({
       success: true,
       user: {
@@ -313,20 +384,19 @@ export const getEmployeeProfile = async (req, res) => {
   try {
     const { employeeId } = req.params;
 
-    const query = `
-      SELECT * FROM employees
-      WHERE employee_id = ? AND is_deleted = false
-    `;
-    const results = await queryDatabase(query, [employeeId]);
+    const employeesCollection = await getEmployeesCollection();
+    const employee = await employeesCollection.findOne({
+      employee_id: employeeId,
+      is_deleted: false
+    });
 
-    if (results.length === 0) {
+    if (!employee) {
       return res.status(404).json({
         success: false,
         message: 'Employee not found.'
       });
     }
 
-    const employee = results[0];
     res.status(200).json({
       success: true,
       employee: {

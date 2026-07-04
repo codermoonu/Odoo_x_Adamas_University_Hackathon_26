@@ -8,8 +8,9 @@ const Layout = () => {
   const {user, loading} = useAuth()
 
   if(loading) return <Loading />
-  // TEMP: auth gate disabled for local preview without a backend - restore this before shipping
-  // if(!user) return <Navigate to="/login" />
+  if(!user) return <Navigate to="/login" />
+  if(user.firstLogin) return <Navigate to="/change-password" />
+  if(user.role === "ADMIN" || user.role === "HR") return <Navigate to="/admin/dashboard" />
 
   return (
     <div className="flex h-screen bg-slate-950">
