@@ -18,6 +18,8 @@
 
 This repository is our official submission hub for the **Odoo x Adamas University Hackathon 2026** — where ideas turn into code, and code turns into impact. 💡⚡
 
+**Problem Statement:** Human Resource Management System
+
 ---
 
 ## 🧰 Tech Stack
@@ -100,17 +102,20 @@ git push origin main
 
 ---
 
-### 📝 6. Commit Message Guidelines
-- **Start with a short summary of the change** (50 characters or less)
-- **Include a detailed description of the change** (if necessary)
-- **Use the imperative mood** (e.g., "Fix" instead of "Fixed" or "Fixes")
-- **Reference related issues** (e.g., `Fixes #123`)
+## 👥 Team
 
-### 📚 7. Git Commit Message Examples
+| Name | GitHub |
+|------|--------|
+| Puja Dey (Team Leader) | [@Puja Dey](#) |
+| @AD | [@AD](#) |
+| Abhinav | [@Abhinav](#) |
+| ishanaDG26 | [@ishanaDG26](#) |
 
-| Commit Message | Description |
-|----------------|-------------|
-| Fix bug in login page | Fixed a bug where the login page would not load correctly. |
+## 🧑‍⚖️ Evaluator
+
+> **Jay Patel** ([@jayp](#))
+
+---
 
 <div align="center">
 
