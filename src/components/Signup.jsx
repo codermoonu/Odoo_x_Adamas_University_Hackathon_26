@@ -1,7 +1,7 @@
 import React, { useState } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
-import { Briefcase, User, Mail, Lock, Shield, Key, Landmark, Percent, Calendar, Phone, AlertCircle, ArrowRight } from 'lucide-react'
-import { signupUser } from '../utils/mockDb.js'
+import { Link, useNavigate, useLocation } from 'react-router-dom'
+import { Briefcase, User, Mail, Shield, Landmark, Percent, Calendar, Phone, AlertCircle, ArrowRight, Copy, Check } from 'lucide-react'
+import { createUserByAdmin } from '../utils/mockDb.js'
 
 const DEPARTMENTS = [
   "Engineering",
@@ -29,97 +29,135 @@ const SUGGESTED_POSITIONS = {
   "Design": ["UI/UX Designer", "Product Designer", "Visual Designer", "Creative Lead"]
 };
 
-function Signup({ onLogin }) {
-  const [role, setRole] = useState('EMPLOYEE') // Default to Employee as shown first in requirements
-  const [firstName, setFirstName] = useState('')
-  const [lastName, setLastName] = useState('')
-  const [email, setEmail] = useState('')
-  const [password, setPassword] = useState('')
-  const [confirmPassword, setConfirmPassword] = useState('')
-  const [phone, setPhone] = useState('')
+function Signup({ onLogin, currentUser }) {
+  const location = useLocation();
+  const navigate = useNavigate();
 
-  // Admin-specific
-  const [secretCode, setSecretCode] = useState('')
+  // Check if user is logged in and has admin role
+  const isAdminAccess = currentUser?.role === "ADMIN";
 
-  // Employee-specific
-  const [department, setDepartment] = useState(DEPARTMENTS[0])
-  const [position, setPosition] = useState('')
-  const [basicSalary, setBasicSalary] = useState('')
-  const [allowances, setAllowances] = useState('')
-  const [deductions, setDeductions] = useState('')
-  const [joinDate, setJoinDate] = useState(new Date().toISOString().split('T')[0])
+  // Redirect to login if not admin
+  React.useEffect(() => {
+    if (location.pathname === '/signup' && !isAdminAccess) {
+      navigate('/login');
+    }
+  }, [isAdminAccess, location.pathname, navigate]);
 
-  const [error, setError] = useState('')
-  const [loading, setLoading] = useState(false)
+  const [firstName, setFirstName] = useState('');
+  const [lastName, setLastName] = useState('');
+  const [email, setEmail] = useState('');
+  const [phone, setPhone] = useState('');
+  const [department, setDepartment] = useState(DEPARTMENTS[0]);
+  const [position, setPosition] = useState('');
+  const [basicSalary, setBasicSalary] = useState('');
+  const [allowances, setAllowances] = useState('');
+  const [deductions, setDeductions] = useState('');
+  const [joinDate, setJoinDate] = useState(new Date().toISOString().split('T')[0]);
 
-  const navigate = useNavigate()
-
-  const handleRoleChange = (selectedRole) => {
-    setRole(selectedRole)
-    setError('')
-  }
+  const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [success, setSuccess] = useState(false);
+  const [createdUser, setCreatedUser] = useState(null);
+  const [copied, setCopied] = useState(false);
 
   const handleSubmit = (e) => {
-    e.preventDefault()
-    setError('')
+    e.preventDefault();
+    setError('');
 
-    // Basic Validations
-    if (!firstName || !lastName || !email || !password) {
-      setError('Please fill in all core fields.')
-      return
+    // Validation
+    if (!firstName || !lastName || !email) {
+      setError('Please fill in all required fields.');
+      return;
     }
 
-    if (password !== confirmPassword) {
-      setError('Passwords do not match.')
-      return
+    if (!position) {
+      setError('Please enter the employee position.');
+      return;
     }
 
-    if (role === 'ADMIN' && !secretCode) {
-      setError('Please enter the Admin Secret Code.')
-      return
+    if (!basicSalary || Number(basicSalary) <= 0) {
+      setError('Please enter a valid Basic Salary.');
+      return;
     }
 
-    if (role === 'EMPLOYEE') {
-      if (!position) {
-        setError('Please enter your position.')
-        return
-      }
-      if (!basicSalary || Number(basicSalary) <= 0) {
-        setError('Please enter a valid Basic Salary.')
-        return
-      }
-    }
-
-    setLoading(true)
+    setLoading(true);
 
     setTimeout(() => {
       try {
-        const signupData = {
-          role,
+        const newUser = createUserByAdmin({
           firstName,
           lastName,
           email,
-          password,
           phone,
-          ...(role === 'ADMIN' ? { secretCode } : {
-            department,
-            position,
-            basicSalary: Number(basicSalary),
-            allowances: Number(allowances) || 0,
-            deductions: Number(deductions) || 0,
-            joinDate
-          })
-        }
+          department,
+          position,
+          basicSalary: Number(basicSalary),
+          allowances: Number(allowances) || 0,
+          deductions: Number(deductions) || 0,
+          joinDate
+        });
 
-        const user = signupUser(signupData)
-        onLogin(user)
-        navigate('/dashboard')
+        setCreatedUser(newUser);
+        setSuccess(true);
+        // Reset form
+        setFirstName('');
+        setLastName('');
+        setEmail('');
+        setPhone('');
+        setDepartment(DEPARTMENTS[0]);
+        setPosition('');
+        setBasicSalary('');
+        setAllowances('');
+        setDeductions('');
+        setJoinDate(new Date().toISOString().split('T')[0]);
       } catch (err) {
-        setError(err.message || 'Signup failed. Please try again.')
+        setError(err.message || 'Failed to create user. Please try again.');
       } finally {
-        setLoading(false)
+        setLoading(false);
       }
-    }, 800)
+    }, 800);
+  };
+
+  const copyToClipboard = (text) => {
+    navigator.clipboard.writeText(text);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+
+  // If not admin, show access denied message
+  if (!isAdminAccess && location.pathname === '/signup') {
+    return (
+      <div className="min-h-screen flex flex-col justify-center items-center px-4 py-12 relative overflow-hidden bg-[#090d16]">
+        <div className="absolute top-[-20%] left-[-10%] w-[600px] h-[600px] rounded-full bg-violet-600/10 blur-[120px] pointer-events-none"></div>
+        <div className="absolute bottom-[-20%] right-[-10%] w-[600px] h-[600px] rounded-full bg-indigo-600/10 blur-[120px] pointer-events-none"></div>
+
+        <div className="w-full max-w-[440px] animate-slide-up">
+          <div className="flex flex-col items-center mb-8 text-center">
+            <div className="p-3 bg-rose-600/20 rounded-2xl border border-rose-500/30 shadow-lg shadow-rose-500/15 mb-4">
+              <AlertCircle className="h-8 w-8 text-rose-400" />
+            </div>
+            <h1 className="text-3xl font-extrabold tracking-tight text-white font-outfit">
+              Quick<span className="text-violet-400">EMS</span>
+            </h1>
+            <p className="text-slate-400 text-sm mt-1.5 font-inter">
+              Access Denied
+            </p>
+          </div>
+
+          <div className="glass-panel p-8 rounded-2xl relative text-center">
+            <p className="text-slate-300 mb-6">
+              Only HR Administrators can add new employees. Please log in with an Admin account.
+            </p>
+            <Link
+              to="/login"
+              className="inline-flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-500 hover:to-indigo-500 text-white font-medium rounded-xl transition-all duration-300"
+            >
+              Go to Login <ArrowRight className="h-4 w-4" />
+            </Link>
+          </div>
+        </div>
+      </div>
+    );
   }
 
   return (
@@ -128,7 +166,7 @@ function Signup({ onLogin }) {
       <div className="absolute top-[-20%] left-[-10%] w-[600px] h-[600px] rounded-full bg-violet-600/10 blur-[120px] pointer-events-none"></div>
       <div className="absolute bottom-[-20%] right-[-10%] w-[600px] h-[600px] rounded-full bg-indigo-600/10 blur-[120px] pointer-events-none"></div>
 
-      <div className="w-full max-w-[640px] animate-slide-up">
+      <div className="w-full max-w-[680px] animate-slide-up">
         {/* Brand Header */}
         <div className="flex flex-col items-center mb-6 text-center">
           <div className="p-3 bg-violet-600/20 rounded-2xl border border-violet-500/30 shadow-lg shadow-violet-500/15 mb-3">
@@ -138,7 +176,7 @@ function Signup({ onLogin }) {
             Quick<span className="text-violet-400">EMS</span>
           </h1>
           <p className="text-slate-400 text-xs mt-1 font-inter">
-            Human Resource Management System Registration
+            Add New Employee
           </p>
         </div>
 
@@ -146,187 +184,162 @@ function Signup({ onLogin }) {
         <div className="glass-panel p-8 rounded-2xl relative">
           <div className="absolute inset-0 bg-gradient-to-b from-white/[0.01] to-transparent pointer-events-none rounded-2xl"></div>
 
-          <h2 className="text-xl font-semibold text-slate-100 mb-6 font-outfit">
-            Create Account
+          <h2 className="text-xl font-semibold text-slate-100 mb-1 font-outfit">
+            Create Employee Account
           </h2>
+          <p className="text-slate-400 text-xs mb-6">
+            Login credentials will be auto-generated. Employee will receive their Login ID and temporary password.
+          </p>
 
-          {/* Role Tabs */}
-          <div className="mb-6 space-y-2">
-            <label className="block text-xs font-semibold uppercase tracking-wider text-slate-400">
-              Select Registration Role
-            </label>
-            <div className="flex p-1 bg-slate-950/60 rounded-xl border border-slate-800/80">
+          {/* Success Message */}
+          {success && createdUser && (
+            <div className="mb-6 p-4 bg-emerald-500/10 border border-emerald-500/20 rounded-xl animate-fade-in">
+              <h3 className="text-emerald-300 font-semibold mb-4">✓ Employee Account Created Successfully!</h3>
+              
+              <div className="space-y-3 text-sm">
+                {/* Employee Info */}
+                <div className="bg-slate-900/40 p-3 rounded-lg">
+                  <p className="text-slate-400 text-xs uppercase tracking-wider mb-1">Employee Details</p>
+                  <p className="text-slate-100"><span className="font-semibold">Name:</span> {createdUser.firstName} {createdUser.lastName}</p>
+                  <p className="text-slate-100"><span className="font-semibold">Email:</span> {createdUser.email}</p>
+                </div>
+
+                {/* Login Credentials */}
+                <div className="bg-slate-900/40 p-3 rounded-lg">
+                  <p className="text-slate-400 text-xs uppercase tracking-wider mb-2">Login Credentials</p>
+                  
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between gap-2 bg-slate-950 p-2 rounded border border-slate-800">
+                      <div>
+                        <p className="text-[10px] text-slate-500 uppercase tracking-wider">Login ID</p>
+                        <p className="text-slate-100 font-mono font-bold text-sm">{createdUser.loginId}</p>
+                      </div>
+                      <button
+                        onClick={() => copyToClipboard(createdUser.loginId)}
+                        className="p-2 hover:bg-slate-900 rounded transition-colors"
+                        title="Copy to clipboard"
+                      >
+                        {copied ? <Check className="h-4 w-4 text-emerald-400" /> : <Copy className="h-4 w-4 text-slate-400" />}
+                      </button>
+                    </div>
+
+                    <div className="flex items-center justify-between gap-2 bg-slate-950 p-2 rounded border border-slate-800">
+                      <div>
+                        <p className="text-[10px] text-slate-500 uppercase tracking-wider">Temporary Password</p>
+                        <p className="text-slate-100 font-mono font-bold text-sm">{createdUser.tempPassword}</p>
+                      </div>
+                      <button
+                        onClick={() => copyToClipboard(createdUser.tempPassword)}
+                        className="p-2 hover:bg-slate-900 rounded transition-colors"
+                        title="Copy to clipboard"
+                      >
+                        {copied ? <Check className="h-4 w-4 text-emerald-400" /> : <Copy className="h-4 w-4 text-slate-400" />}
+                      </button>
+                    </div>
+                  </div>
+
+                  <p className="text-[11px] text-slate-400 mt-2">
+                    ℹ Employee must change this password on first login.
+                  </p>
+                </div>
+              </div>
+
               <button
-                type="button"
-                onClick={() => handleRoleChange('EMPLOYEE')}
-                className={`flex-1 flex items-center justify-center gap-2 py-3 rounded-lg text-sm font-semibold transition-all duration-200 cursor-pointer ${role === 'EMPLOYEE'
-                    ? 'bg-violet-600 text-white shadow-md shadow-violet-500/25'
-                    : 'text-slate-400 hover:text-slate-200 hover:bg-slate-900/30'
-                  }`}
+                onClick={() => setSuccess(false)}
+                className="w-full mt-4 py-2 px-4 bg-slate-800 hover:bg-slate-700 text-white font-medium rounded-lg text-sm transition-all"
               >
-                <User className="h-4.5 w-4.5" />
-                Employee Account
-              </button>
-              <button
-                type="button"
-                onClick={() => handleRoleChange('ADMIN')}
-                className={`flex-1 flex items-center justify-center gap-2 py-3 rounded-lg text-sm font-semibold transition-all duration-200 cursor-pointer ${role === 'ADMIN'
-                    ? 'bg-violet-600 text-white shadow-md shadow-violet-500/25'
-                    : 'text-slate-400 hover:text-slate-200 hover:bg-slate-900/30'
-                  }`}
-              >
-                <Shield className="h-4.5 w-4.5" />
-                Admin / HR Manager
+                Add Another Employee
               </button>
             </div>
-          </div>
+          )}
 
-          {error && (
+          {error && !success && (
             <div className="mb-6 flex items-start gap-2.5 p-3.5 bg-rose-500/10 border border-rose-500/20 rounded-xl text-rose-300 text-xs animate-fade-in">
               <AlertCircle className="h-4 w-4 shrink-0 text-rose-400 mt-0.5" />
               <span>{error}</span>
             </div>
           )}
 
-          <form onSubmit={handleSubmit} className="space-y-6">
-            {/* Core User Details */}
-            <div className="space-y-4">
-              <h3 className="text-xs font-semibold text-violet-400 uppercase tracking-widest border-b border-slate-800/80 pb-2">
-                Core Information
-              </h3>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="space-y-1.5">
-                  <label className="text-[11px] font-semibold uppercase tracking-wider text-slate-400">First Name</label>
-                  <input
-                    type="text"
-                    placeholder="John"
-                    className="custom-input"
-                    value={firstName}
-                    onChange={(e) => setFirstName(e.target.value)}
-                    disabled={loading}
-                  />
-                </div>
-                <div className="space-y-1.5">
-                  <label className="text-[11px] font-semibold uppercase tracking-wider text-slate-400">Last Name</label>
-                  <input
-                    type="text"
-                    placeholder="Doe"
-                    className="custom-input"
-                    value={lastName}
-                    onChange={(e) => setLastName(e.target.value)}
-                    disabled={loading}
-                  />
-                </div>
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="space-y-1.5">
-                  <label className="text-[11px] font-semibold uppercase tracking-wider text-slate-400">Email Address</label>
-                  <div className="relative">
-                    <Mail className="absolute left-3 top-3.5 h-4 w-4 text-slate-500" />
-                    <input
-                      type="email"
-                      placeholder="john.doe@company.com"
-                      className="custom-input pl-10"
-                      value={email}
-                      onChange={(e) => setEmail(e.target.value)}
-                      disabled={loading}
-                    />
-                  </div>
-                </div>
-                <div className="space-y-1.5">
-                  <label className="text-[11px] font-semibold uppercase tracking-wider text-slate-400">Phone Number</label>
-                  <div className="relative">
-                    <Phone className="absolute left-3 top-3.5 h-4 w-4 text-slate-500" />
-                    <input
-                      type="tel"
-                      placeholder="9876543210"
-                      className="custom-input pl-10"
-                      value={phone}
-                      onChange={(e) => setPhone(e.target.value)}
-                      disabled={loading}
-                    />
-                  </div>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="space-y-1.5">
-                  <label className="text-[11px] font-semibold uppercase tracking-wider text-slate-400">Password</label>
-                  <div className="relative">
-                    <Lock className="absolute left-3 top-3.5 h-4 w-4 text-slate-500" />
-                    <input
-                      type="password"
-                      placeholder="••••••••"
-                      className="custom-input pl-10"
-                      value={password}
-                      onChange={(e) => setPassword(e.target.value)}
-                      disabled={loading}
-                    />
-                  </div>
-                </div>
-                <div className="space-y-1.5">
-                  <label className="text-[11px] font-semibold uppercase tracking-wider text-slate-400">Confirm Password</label>
-                  <div className="relative">
-                    <Lock className="absolute left-3 top-3.5 h-4 w-4 text-slate-500" />
-                    <input
-                      type="password"
-                      placeholder="••••••••"
-                      className="custom-input pl-10"
-                      value={confirmPassword}
-                      onChange={(e) => setConfirmPassword(e.target.value)}
-                      disabled={loading}
-                    />
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            {/* Admin Specific Settings */}
-            {role === 'ADMIN' && (
-              <div className="space-y-4 animate-fade-in">
+          {!success && (
+            <form onSubmit={handleSubmit} className="space-y-6">
+              {/* Employee Personal Details */}
+              <div className="space-y-4">
                 <h3 className="text-xs font-semibold text-violet-400 uppercase tracking-widest border-b border-slate-800/80 pb-2">
-                  Admin Credentials
-                </h3>
-                <div className="space-y-1.5">
-                  <label className="text-[11px] font-semibold uppercase tracking-wider text-slate-400 flex items-center gap-1">
-                    Secret Verification Code <span className="text-rose-400">*</span>
-                  </label>
-                  <div className="relative">
-                    <Key className="absolute left-3 top-3.5 h-4 w-4 text-slate-500" />
-                    <input
-                      type="password"
-                      placeholder="Enter verification code (e.g. any code for mockup)"
-                      className="custom-input pl-10"
-                      value={secretCode}
-                      onChange={(e) => setSecretCode(e.target.value)}
-                      disabled={loading}
-                    />
-                  </div>
-                  <p className="text-[10px] text-slate-500 mt-1">
-                    Required to verify administrator rights. Any value works for this demo.
-                  </p>
-                </div>
-              </div>
-            )}
-
-            {/* Employee Specific Settings */}
-            {role === 'EMPLOYEE' && (
-              <div className="space-y-4 animate-fade-in">
-                <h3 className="text-xs font-semibold text-violet-400 uppercase tracking-widest border-b border-slate-800/80 pb-2">
-                  Employment Profile Details
+                  Personal Information
                 </h3>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div className="space-y-1.5">
-                    <label className="text-[11px] font-semibold uppercase tracking-wider text-slate-400">Department</label>
+                    <label className="text-[11px] font-semibold uppercase tracking-wider text-slate-400">First Name <span className="text-rose-400">*</span></label>
+                    <input
+                      type="text"
+                      placeholder="John"
+                      className="custom-input"
+                      value={firstName}
+                      onChange={(e) => setFirstName(e.target.value)}
+                      disabled={loading}
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="text-[11px] font-semibold uppercase tracking-wider text-slate-400">Last Name <span className="text-rose-400">*</span></label>
+                    <input
+                      type="text"
+                      placeholder="Doe"
+                      className="custom-input"
+                      value={lastName}
+                      onChange={(e) => setLastName(e.target.value)}
+                      disabled={loading}
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="space-y-1.5">
+                    <label className="text-[11px] font-semibold uppercase tracking-wider text-slate-400">Email Address <span className="text-rose-400">*</span></label>
+                    <div className="relative">
+                      <Mail className="absolute left-3 top-3.5 h-4 w-4 text-slate-500" />
+                      <input
+                        type="email"
+                        placeholder="john.doe@company.com"
+                        className="custom-input pl-10"
+                        value={email}
+                        onChange={(e) => setEmail(e.target.value)}
+                        disabled={loading}
+                      />
+                    </div>
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="text-[11px] font-semibold uppercase tracking-wider text-slate-400">Phone Number</label>
+                    <div className="relative">
+                      <Phone className="absolute left-3 top-3.5 h-4 w-4 text-slate-500" />
+                      <input
+                        type="tel"
+                        placeholder="9876543210"
+                        className="custom-input pl-10"
+                        value={phone}
+                        onChange={(e) => setPhone(e.target.value)}
+                        disabled={loading}
+                      />
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Employment Details */}
+              <div className="space-y-4">
+                <h3 className="text-xs font-semibold text-violet-400 uppercase tracking-widest border-b border-slate-800/80 pb-2">
+                  Employment Profile
+                </h3>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="space-y-1.5">
+                    <label className="text-[11px] font-semibold uppercase tracking-wider text-slate-400">Department <span className="text-rose-400">*</span></label>
                     <select
                       className="custom-input cursor-pointer"
                       value={department}
                       onChange={(e) => {
-                        setDepartment(e.target.value)
-                        setPosition('') // Clear position suggestions
+                        setDepartment(e.target.value);
+                        setPosition('');
                       }}
                       disabled={loading}
                     >
@@ -336,7 +349,7 @@ function Signup({ onLogin }) {
                     </select>
                   </div>
                   <div className="space-y-1.5">
-                    <label className="text-[11px] font-semibold uppercase tracking-wider text-slate-400">Position / Job Title</label>
+                    <label className="text-[11px] font-semibold uppercase tracking-wider text-slate-400">Position / Job Title <span className="text-rose-400">*</span></label>
                     <input
                       type="text"
                       list="positions"
@@ -354,10 +367,33 @@ function Signup({ onLogin }) {
                   </div>
                 </div>
 
+                <div className="space-y-1.5">
+                  <label className="text-[11px] font-semibold uppercase tracking-wider text-slate-400 flex items-center gap-1">
+                    Join Date <Calendar className="h-3.5 w-3.5 text-slate-500" />
+                  </label>
+                  <input
+                    type="date"
+                    className="custom-input"
+                    value={joinDate}
+                    onChange={(e) => setJoinDate(e.target.value)}
+                    disabled={loading}
+                  />
+                  <p className="text-[10px] text-slate-500">
+                    Login ID will be generated based on this date
+                  </p>
+                </div>
+              </div>
+
+              {/* Salary Details */}
+              <div className="space-y-4">
+                <h3 className="text-xs font-semibold text-violet-400 uppercase tracking-widest border-b border-slate-800/80 pb-2">
+                  Salary Information
+                </h3>
+
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                   <div className="space-y-1.5">
                     <label className="text-[11px] font-semibold uppercase tracking-wider text-slate-400 flex items-center gap-1">
-                      Basic Salary <Landmark className="h-3 w-3 text-slate-500" />
+                      Basic Salary <Landmark className="h-3 w-3 text-slate-500" /> <span className="text-rose-400">*</span>
                     </label>
                     <input
                       type="number"
@@ -395,49 +431,34 @@ function Signup({ onLogin }) {
                     />
                   </div>
                 </div>
-
-                <div className="space-y-1.5">
-                  <label className="text-[11px] font-semibold uppercase tracking-wider text-slate-400 flex items-center gap-1">
-                    Join Date <Calendar className="h-3.5 w-3.5 text-slate-500" />
-                  </label>
-                  <input
-                    type="date"
-                    className="custom-input"
-                    value={joinDate}
-                    onChange={(e) => setJoinDate(e.target.value)}
-                    disabled={loading}
-                  />
-                </div>
               </div>
-            )}
 
-            {/* Submit Button */}
-            <button
-              type="submit"
-              disabled={loading}
-              className="w-full py-3.5 px-4 bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-500 hover:to-indigo-500 text-white font-semibold rounded-xl text-sm transition-all duration-300 transform active:scale-[0.98] shadow-lg shadow-violet-500/20 hover:shadow-violet-500/35 border border-violet-400/20 flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
-            >
-              {loading ? (
-                <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
-              ) : (
-                <>
-                  Register Account <ArrowRight className="h-4.5 w-4.5" />
-                </>
-              )}
-            </button>
-          </form>
+              {/* Submit Button */}
+              <button
+                type="submit"
+                disabled={loading}
+                className="w-full py-3.5 px-4 bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-500 hover:to-indigo-500 text-white font-semibold rounded-xl text-sm transition-all duration-300 transform active:scale-[0.98] shadow-lg shadow-violet-500/20 hover:shadow-violet-500/35 border border-violet-400/20 flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
+              >
+                {loading ? (
+                  <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
+                ) : (
+                  <>
+                    Create Employee Account <ArrowRight className="h-4.5 w-4.5" />
+                  </>
+                )}
+              </button>
+            </form>
+          )}
 
-          {/* Login Switch */}
-          <div className="mt-8 text-center text-sm border-t border-slate-800/60 pt-6">
-            <span className="text-slate-500">Already have an account? </span>
-            <Link to="/login" className="text-violet-400 hover:text-violet-300 font-semibold transition-colors duration-150">
-              Sign In
-            </Link>
+          {/* Footer */}
+          <div className="mt-6 text-center text-xs text-slate-500">
+            <p>❓ Questions about employee creation?</p>
+            <p className="mt-1">Contact your system administrator</p>
           </div>
         </div>
       </div>
     </div>
-  )
+  );
 }
 
 export default Signup;

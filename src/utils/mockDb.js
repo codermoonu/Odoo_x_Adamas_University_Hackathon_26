@@ -19,6 +19,36 @@ const setStorageItem = (key, value) => {
   localStorage.setItem(key, JSON.stringify(value));
 };
 
+// Function to generate Login ID
+// Format: OI + First 2 letters of first name + First 2 letters of last name + Year of joining + Serial number
+const generateLoginId = (firstName, lastName, joinDate) => {
+  const year = new Date(joinDate).getFullYear();
+  const first2FirstName = (firstName || "").substring(0, 2).toUpperCase();
+  const first2LastName = (lastName || "").substring(0, 2).toUpperCase();
+  
+  // Get all users to find the max serial for this year
+  const users = getStorageItem("hrms_users", []);
+  const usersInYear = users.filter(u => {
+    const userYear = new Date(u.joinDate).getFullYear();
+    return userYear === year;
+  });
+  
+  const nextSerial = usersInYear.length + 1;
+  const serialNumber = String(nextSerial).padStart(4, '0');
+  
+  return `OI${first2FirstName}${first2LastName}${year}${serialNumber}`;
+};
+
+// Function to generate temporary password
+const generateTempPassword = () => {
+  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!@#$%^&*';
+  let password = '';
+  for (let i = 0; i < 12; i++) {
+    password += chars.charAt(Math.floor(Math.random() * chars.length));
+  }
+  return password;
+};
+
 // Initial data templates from assets.jsx
 const initialEmployees = [
   {
@@ -79,36 +109,56 @@ const initialEmployees = [
 
 const initialUsers = [
   {
+    _id: "admin-default-id",
+    loginId: "OIADOW20260001",
     email: "admin@example.com",
-    password: "admin123",
+    password: "Admin@123456",
+    tempPassword: null,
     role: "ADMIN",
     firstName: "Admin",
     lastName: "Owner",
-    _id: "admin-default-id"
+    joinDate: "2026-01-01",
+    firstLogin: false,
+    createdAt: "2026-03-13T13:32:22.013Z"
   },
   {
+    _id: "69b414a7f8a807df391d7b58",
+    loginId: "OIDAMI20240001",
     email: "david@example.com",
-    password: "password123",
+    password: "TempPass@1234",
+    tempPassword: "TempPass@1234",
     role: "EMPLOYEE",
     firstName: "David",
     lastName: "Michael",
-    _id: "69b414a7f8a807df391d7b58"
+    joinDate: "2024-01-20",
+    firstLogin: true,
+    createdAt: "2026-03-13T13:44:07.806Z"
   },
   {
+    _id: "69b41439f8a807df391d7b52",
+    loginId: "OIAMAM20240002",
     email: "alex@example.com",
-    password: "password123",
+    password: "TempPass@1234",
+    tempPassword: "TempPass@1234",
     role: "EMPLOYEE",
     firstName: "Alex",
     lastName: "Matthew",
-    _id: "69b41439f8a807df391d7b52"
+    joinDate: "2024-05-15",
+    firstLogin: true,
+    createdAt: "2026-03-13T13:42:17.589Z"
   },
   {
+    _id: "69b411e6f8a807df391d7b13",
+    loginId: "OIJODO20230001",
     email: "johndoe@example.com",
-    password: "password123",
+    password: "TempPass@1234",
+    tempPassword: "TempPass@1234",
     role: "EMPLOYEE",
     firstName: "John",
     lastName: "Doe",
-    _id: "69b411e6f8a807df391d7b13"
+    joinDate: "2023-01-20",
+    firstLogin: true,
+    createdAt: "2026-03-13T13:32:22.013Z"
   }
 ];
 
@@ -187,7 +237,7 @@ const initialPayslips = [
     allowances: 100,
     deductions: 9.98,
     netSalary: 1090.02,
-    createdAt: "2026-03-13T13:46:14.884Z"
+    createdAt: "2026-03-13T13:46:14.824Z"
   }
 ];
 
@@ -233,73 +283,116 @@ export const getDb = () => {
   };
 };
 
-export const loginUser = (email, password) => {
+// Login with Login ID instead of Email
+export const loginUser = (loginId, password) => {
   const { users } = getDb();
-  const user = users.find(u => u.email.toLowerCase() === email.toLowerCase() && u.password === password);
+  const user = users.find(u => u.loginId === loginId.toUpperCase() && u.password === password);
+  
   if (!user) {
-    throw new Error("Invalid email or password.");
+    throw new Error("Invalid Login ID or password.");
   }
+  
   return {
     _id: user._id,
+    loginId: user.loginId,
     email: user.email,
     role: user.role,
     firstName: user.firstName,
-    lastName: user.lastName
+    lastName: user.lastName,
+    firstLogin: user.firstLogin
   };
 };
 
-export const signupUser = (data) => {
+// Change password after first login
+export const changePassword = (userId, newPassword) => {
+  const { users } = getDb();
+  const updatedUsers = users.map(u => 
+    u._id === userId 
+      ? { ...u, password: newPassword, tempPassword: null, firstLogin: false }
+      : u
+  );
+  setStorageItem("hrms_users", updatedUsers);
+  return { success: true, message: "Password changed successfully" };
+};
+
+// Create new user (Admin/HR only)
+export const createUserByAdmin = (employeeData) => {
   const { users, employees } = getDb();
 
-  if (users.some(u => u.email.toLowerCase() === data.email.toLowerCase())) {
+  // Validate required fields
+  if (!employeeData.firstName || !employeeData.lastName || !employeeData.email) {
+    throw new Error("First Name, Last Name, and Email are required.");
+  }
+
+  // Check if email already exists
+  if (users.some(u => u.email.toLowerCase() === employeeData.email.toLowerCase())) {
     throw new Error("Email is already registered.");
   }
 
   const userId = Math.random().toString(36).substring(2, 11) + Date.now().toString(36);
+  const joinDate = employeeData.joinDate || new Date().toISOString().split('T')[0];
+  
+  // Generate Login ID
+  const loginId = generateLoginId(employeeData.firstName, employeeData.lastName, joinDate);
+  
+  // Generate Temporary Password
+  const tempPassword = generateTempPassword();
 
   const newUser = {
     _id: userId,
-    email: data.email,
-    password: data.password,
-    role: data.role,
-    firstName: data.firstName,
-    lastName: data.lastName
+    loginId: loginId,
+    email: employeeData.email,
+    password: tempPassword,
+    tempPassword: tempPassword,
+    role: "EMPLOYEE",
+    firstName: employeeData.firstName,
+    lastName: employeeData.lastName,
+    joinDate: joinDate,
+    firstLogin: true,
+    createdAt: new Date().toISOString()
   };
 
   const updatedUsers = [...users, newUser];
   setStorageItem("hrms_users", updatedUsers);
 
-  if (data.role === "EMPLOYEE") {
-    const newEmployee = {
-      _id: userId,
-      firstName: data.firstName,
-      lastName: data.lastName,
-      email: data.email,
-      phone: data.phone || "—",
-      department: data.department,
-      position: data.position,
-      basicSalary: Number(data.basicSalary) || 0,
-      allowances: Number(data.allowances) || 0,
-      deductions: Number(data.deductions) || 0,
-      employmentStatus: "ACTIVE",
-      joinDate: data.joinDate || new Date().toISOString().split('T')[0],
-      image: null,
-      isDeleted: false,
-      bio: "",
-      createdAt: new Date().toISOString()
-    };
+  // Create corresponding employee record
+  const newEmployee = {
+    _id: userId,
+    firstName: employeeData.firstName,
+    lastName: employeeData.lastName,
+    email: employeeData.email,
+    phone: employeeData.phone || "—",
+    department: employeeData.department,
+    position: employeeData.position,
+    basicSalary: Number(employeeData.basicSalary) || 0,
+    allowances: Number(employeeData.allowances) || 0,
+    deductions: Number(employeeData.deductions) || 0,
+    employmentStatus: "ACTIVE",
+    joinDate: joinDate,
+    image: null,
+    isDeleted: false,
+    bio: "",
+    createdAt: new Date().toISOString()
+  };
 
-    const updatedEmployees = [...employees, newEmployee];
-    setStorageItem("hrms_employees", updatedEmployees);
-  }
+  const updatedEmployees = [...employees, newEmployee];
+  setStorageItem("hrms_employees", updatedEmployees);
 
   return {
     _id: newUser._id,
+    loginId: newUser.loginId,
     email: newUser.email,
     role: newUser.role,
     firstName: newUser.firstName,
-    lastName: newUser.lastName
+    lastName: newUser.lastName,
+    tempPassword: tempPassword,
+    firstLogin: true
   };
+};
+
+// Keep signupUser for backward compatibility but make it throw error
+export const signupUser = (data) => {
+  throw new Error("Self-registration is disabled. Please contact HR Administrator to create your account.");
 };
 
 export const applyForLeave = (employeeId, leaveData) => {
